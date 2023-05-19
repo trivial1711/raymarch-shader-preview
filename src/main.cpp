@@ -10,7 +10,7 @@
 
 using namespace std;
 
-const int NUM_CONTROLS = 12;
+const int NUM_CONTROLS = 13;
 const string CONTROLS_STRINGS[2 * NUM_CONTROLS] = {
     "Left click:", "Lock mouse",
     "Esc:", "Release mouse",
@@ -23,7 +23,8 @@ const string CONTROLS_STRINGS[2 * NUM_CONTROLS] = {
     "E:", "Move up",
     "F12:", "Take screenshot",
     "Tab:", "Toggle controls display",
-    "F:", "Toggle frame rate display"
+    "F:", "Toggle frame rate display",
+    "X:", "Toggle anti-aliasing"
 };
 const float MARGIN_PIXELS = 8.f;
 const int FONT_SIZE = 16;
@@ -125,9 +126,17 @@ int main(int ac, char** av)
     frameRateText.setCharacterSize(FONT_SIZE);
     frameRateText.setOutlineThickness(OUTLINE_THICKNESS);
 
+    sf::Text antiAliasingText;
+    antiAliasingText.setFont(font);
+    antiAliasingText.setCharacterSize(FONT_SIZE);
+    antiAliasingText.setOutlineThickness(OUTLINE_THICKNESS);
+
     bool bMouseLock = false;
     bool bFrameRateDisplay = false;
     bool bControlsDisplay = true;
+    bool bAntiAliasingOn = true;
+
+    float lastAntiAliasingToggleTime = -1000.f;
 
     sf::RenderWindow window(sf::VideoMode(width, height),
         "Shader test", sf::Style::Default);
@@ -141,9 +150,19 @@ int main(int ac, char** av)
     sf::Clock frameClock;
     sf::Clock programClock;
 
+    sf::RenderTexture renderTexture;
+    sf::Shader renderTextureShader;
+    bool bFXAAShaderLoaded = renderTextureShader.loadFromFile("fxaa.glsl", sf::Shader::Fragment);
+    if(bFXAAShaderLoaded) {
+        renderTextureShader.setUniform("texture", sf::Shader::CurrentTexture);
+    } else {
+        cerr << "Failed to load FXAA shader from fxaa.glsl." << endl;
+    }
+
     while (window.isOpen())
     {
         bool bShouldCaptureScreenThisFrame = false;
+        const float time = programClock.getElapsedTime().asSeconds();
         sf::Event event;
         while (window.pollEvent(event))
         {
@@ -164,6 +183,10 @@ int main(int ac, char** av)
             }
             if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::F) {
                 bFrameRateDisplay ^= 1;
+            }
+            if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::X) {
+                bAntiAliasingOn ^= 1;
+                lastAntiAliasingToggleTime = time;
             }
             if (event.type == sf::Event::Resized) {
                 sf::FloatRect visibleArea(0, 0, event.size.width, event.size.height);
@@ -217,8 +240,17 @@ int main(int ac, char** av)
 
         shader.setUniform("position", position);
         shader.setUniform("fragCoordToRayDir", sf::Glsl::Mat4(fragCoordToRayDir));
-        shader.setUniform("time", programClock.getElapsedTime().asSeconds());
-        window.draw(fullscreenShape, &shader);
+        shader.setUniform("time", time);
+
+        if(bFXAAShaderLoaded && bAntiAliasingOn) {
+            renderTexture.create(window.getSize().x, window.getSize().y);
+            renderTexture.clear();
+            renderTexture.draw(fullscreenShape, &shader);
+            renderTexture.display();
+            window.draw(sf::Sprite(renderTexture.getTexture()), &renderTextureShader);
+        } else {
+            window.draw(fullscreenShape, &shader);
+        }
 
         if(bShouldCaptureScreenThisFrame) {
             sf::Texture texture;
@@ -251,6 +283,16 @@ int main(int ac, char** av)
 
             window.draw(frameRateText);
         }
+
+        antiAliasingText.setString((bAntiAliasingOn && bFXAAShaderLoaded) ? "Anti-aliasing: FXAA" : "Anti-aliasing: None");
+        antiAliasingText.setPosition({
+            (float)window.getSize().x - antiAliasingText.getLocalBounds().width - MARGIN_PIXELS,
+            (float)window.getSize().y - antiAliasingText.getLocalBounds().height - MARGIN_PIXELS
+        });
+        const sf::Uint8 alpha = (sf::Uint8)(255 * clamp(3.f - (time - lastAntiAliasingToggleTime), 0.f, 1.f));
+        antiAliasingText.setFillColor(sf::Color(255, 255, 255, alpha));
+        antiAliasingText.setOutlineColor(sf::Color(0, 0, 0, alpha));
+        window.draw(antiAliasingText);
 
         window.display();
     }
