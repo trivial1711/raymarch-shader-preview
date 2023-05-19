@@ -1,0 +1,18 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/main-debug.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [{"name" : "_NO_DEBUG_HEAP", "value" : "1"} ],
+            "externalConsole": true,
+            "MIMode": "gdb",
+            "preLaunchTask": "debug"
+        }
+    ]
+}
